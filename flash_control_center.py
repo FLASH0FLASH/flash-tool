@@ -23,8 +23,8 @@ except ImportError:
 # CONFIG & AUTO-UPDATE
 # ═══════════════════════════════════════════
 APP_VERSION    = "5.0"
-VERSION_URL    = "https://raw.githubusercontent.com/FLASH0FLASH/flash-tool/main/version.txt"
-UPDATE_URL     = "https://raw.githubusercontent.com/FLASH0FLASH/flash-tool/main/flash_control_center.py"
+VERSION_URL    = "https://raw.githubusercontent.com/your-username/flash-tool/main/version.txt"
+UPDATE_URL     = "https://raw.githubusercontent.com/your-username/flash-tool/main/flash.py"
 USER_DATA_FILE = os.path.join(os.path.expanduser("~"), ".flash_user.json")
 
 def load_user_data():
@@ -154,6 +154,30 @@ def show_splash_and_name():
         for pct, msg in steps:
             update_bar(pct, msg)
             time.sleep(0.28)
+
+        # ── Auto-install missing libraries ──
+        required_libs = [
+            ("requests",      "requests"),
+            ("whois",         "python-whois"),
+            ("folium",        "folium"),
+            ("phonenumbers",  "phonenumbers"),
+        ]
+        for import_name, pip_name in required_libs:
+            try:
+                __import__(import_name)
+            except ImportError:
+                update_bar(70, f"📦 تثبيت {pip_name}...")
+                try:
+                    subprocess.run(
+                        [sys.executable, "-m", "pip", "install", pip_name, "-q"],
+                        timeout=60,
+                        capture_output=True
+                    )
+                    update_bar(70, f"✅ تم تثبيت {pip_name}!")
+                    time.sleep(0.3)
+                except Exception:
+                    update_bar(70, f"⚠️ تعذر تثبيت {pip_name}")
+                    time.sleep(0.3)
 
         # Auto-update check
         latest = check_for_update()
@@ -683,6 +707,269 @@ def get_discord_badges(flags):
             if val:
                 badges.append(f"✅ {key.replace('_', ' ').title()}")
     return badges
+
+
+# ═══════════════════════════════════════════
+# PHONE NUMBER LOOKUP
+# ═══════════════════════════════════════════
+def fetch_phone_info(number):
+    """Fetch phone number info using multiple free APIs."""
+    result = {"number": number}
+
+    # Clean number
+    clean = number.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    if not clean.startswith("+"):
+        clean = "+" + clean
+    result["formatted"] = clean
+
+    # ── Method 1: numverify (free tier) ──
+    try:
+        url = f"https://phonevalidation.abstractapi.com/v1/?api_key=free&phone={clean}"
+        resp = requests.get(url, timeout=8)
+        if resp.status_code == 200:
+            d = resp.json()
+            if d.get("valid") is not None:
+                result["valid"]    = d.get("valid", False)
+                result["country"]  = d.get("country", {}).get("name", "")
+                result["location"] = d.get("location", "")
+                result["carrier"]  = d.get("carrier", "")
+                result["type"]     = d.get("type", "")
+                result["source"]   = "AbstractAPI"
+                return result
+    except: pass
+
+    # ── Method 2: phone-number API ──
+    try:
+        url2 = f"https://api.apilayer.com/number_verification/validate?number={clean}"
+        resp2 = requests.get(url2, timeout=8, headers={"apikey": "free"})
+        if resp2.status_code == 200:
+            d = resp2.json()
+            result["valid"]       = d.get("valid", False)
+            result["country"]     = d.get("country_name", "")
+            result["location"]    = d.get("location", "")
+            result["carrier"]     = d.get("carrier", "")
+            result["type"]        = d.get("line_type", "")
+            result["country_code"]= d.get("country_code", "")
+            result["timezone"]    = d.get("timezones", [""])[0] if d.get("timezones") else ""
+            result["source"]      = "APILayer"
+            return result
+    except: pass
+
+    # ── Method 3: phonenumbers library (offline) ──
+    try:
+        import phonenumbers
+        from phonenumbers import geocoder, carrier, timezone as pntimezone
+
+        parsed = phonenumbers.parse(clean, None)
+        result["valid"]        = phonenumbers.is_valid_number(parsed)
+        result["possible"]     = phonenumbers.is_possible_number(parsed)
+        result["country"]      = geocoder.description_for_number(parsed, "ar") or geocoder.description_for_number(parsed, "en")
+        result["carrier"]      = carrier.name_for_number(parsed, "en")
+        result["timezone"]     = ", ".join(pntimezone.time_zones_for_number(parsed))
+        result["country_code"] = f"+{parsed.country_code}"
+        result["national"]     = str(parsed.national_number)
+
+        # Number type
+        num_type = phonenumbers.number_type(parsed)
+        type_map = {
+            0: "📱 موبايل",
+            1: "☎️ أرضي",
+            2: "📠 فاكس أرضي",
+            3: "📠 فاكس موبايل",
+            4: "📟 بيجر",
+            5: "🌐 VoIP",
+            6: "📞 Personal",
+            7: "📺 Premium Rate",
+            8: "💰 Shared Cost",
+            9: "🆓 Toll Free",
+            10: "🌍 Universal",
+        }
+        result["type"]   = type_map.get(num_type, "غير معروف")
+        result["source"] = "phonenumbers (offline)"
+        return result
+    except ImportError:
+        result["_no_lib"] = True
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
+
+
+def open_phone_window():
+    """Open Phone Number Lookup window."""
+    ph_win = tk.Toplevel(root)
+    ph_win.title("📞 Phone Number Lookup")
+    ph_win.geometry("620x650")
+    ph_win.configure(bg="#0A1A0A")
+    ph_win.resizable(False, False)
+
+    # ── Header ──
+    header = tk.Frame(ph_win, bg="#0D2B0D", height=75)
+    header.pack(fill=tk.X)
+    header.pack_propagate(False)
+    tk.Label(header, text="📞  Phone Number Lookup",
+             font=("Segoe UI", 16, "bold"), bg="#0D2B0D", fg="white").pack(pady=8)
+    tk.Label(header, text="فحص أي رقم هاتف في العالم • بيانات عامة فقط",
+             font=("Consolas", 8), bg="#0D2B0D", fg="#4ADE80").pack()
+
+    # ── Input ──
+    input_frame = tk.Frame(ph_win, bg="#0D2B0D", pady=15)
+    input_frame.pack(fill=tk.X, padx=20, pady=10)
+
+    tk.Label(input_frame, text="رقم الهاتف (مع مفتاح الدولة):",
+             font=("Consolas", 10, "bold"), bg="#0D2B0D", fg="#4ADE80").pack(anchor="w", padx=10)
+
+    entry_frame = tk.Frame(input_frame, bg="#1A3A1A",
+                           highlightthickness=2,
+                           highlightbackground="#16A34A",
+                           highlightcolor="#4ADE80")
+    entry_frame.pack(fill=tk.X, padx=10, pady=5)
+
+    tk.Label(entry_frame, text="📞", font=("Segoe UI", 13),
+             bg="#1A3A1A", fg="#16A34A").pack(side=tk.LEFT, padx=(10, 0))
+
+    ph_entry = tk.Entry(entry_frame, font=("Consolas", 13),
+                        bg="#1A3A1A", fg="white",
+                        insertbackground="#16A34A",
+                        bd=0, relief="flat")
+    ph_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, ipady=8)
+    ph_entry.insert(0, "+966501234567")
+    ph_entry.config(fg="#4ADE80")
+
+    def on_click(e):
+        if ph_entry.get() == "+966501234567":
+            ph_entry.delete(0, tk.END)
+            ph_entry.config(fg="white")
+    ph_entry.bind("<FocusIn>", on_click)
+
+    tk.Label(input_frame,
+             text="💡 مثال: +966501234567 (السعودية) | +213550123456 (الجزائر) | +2126XXXXXXXX (المغرب)",
+             font=("Consolas", 8), bg="#0D2B0D", fg="#16A34A",
+             wraplength=560, justify="right").pack(padx=10, pady=(2, 5))
+
+    # ── Result ──
+    result_frame = tk.Frame(ph_win, bg="#0A1A0A")
+    result_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=5)
+
+    result_text = scrolledtext.ScrolledText(result_frame, wrap=tk.WORD,
+                                             bg="#0D2B0D", fg="#DCFCE7",
+                                             font=("Consolas", 10),
+                                             bd=0, relief="flat",
+                                             padx=15, pady=10,
+                                             state=tk.DISABLED)
+    result_text.pack(fill=tk.BOTH, expand=True)
+    result_text.tag_config("title",   foreground="#4ADE80", font=("Consolas", 13, "bold"))
+    result_text.tag_config("key",     foreground="#16A34A", font=("Consolas", 10, "bold"))
+    result_text.tag_config("value",   foreground="#DCFCE7")
+    result_text.tag_config("valid",   foreground="#22C55E", font=("Consolas", 11, "bold"))
+    result_text.tag_config("invalid", foreground="#EF4444", font=("Consolas", 11, "bold"))
+    result_text.tag_config("warning", foreground="#FAA61A")
+    result_text.tag_config("divider", foreground="#1A3A1A")
+    result_text.tag_config("info",    foreground="#4ADE80")
+
+    def insert_r(text, tag="value"):
+        result_text.config(state=tk.NORMAL)
+        result_text.insert(tk.END, text, tag)
+        result_text.config(state=tk.DISABLED)
+
+    def clear_r():
+        result_text.config(state=tk.NORMAL)
+        result_text.delete(1.0, tk.END)
+        result_text.config(state=tk.DISABLED)
+
+    def do_lookup():
+        number = ph_entry.get().strip()
+        if not number or number == "+966501234567":
+            messagebox.showerror("خطأ", "أدخل رقم الهاتف.", parent=ph_win)
+            return
+        clear_r()
+        search_btn.config(state=tk.DISABLED, text="⏳ جارٍ الفحص...")
+        insert_r(f"🔍 فحص الرقم: {number}...\n\n", "warning")
+
+        def run():
+            data = fetch_phone_info(number)
+            clear_r()
+
+            if data.get("error"):
+                insert_r(f"❌ خطأ: {data['error']}\n", "invalid")
+            else:
+                insert_r(f"{'─'*52}\n", "divider")
+                insert_r(f"  📞 {data.get('formatted', number)}\n", "title")
+                insert_r(f"{'─'*52}\n\n", "divider")
+
+                # Valid or not
+                valid = data.get("valid")
+                if valid is True:
+                    insert_r("  ✅ الرقم صحيح وصالح\n\n", "valid")
+                elif valid is False:
+                    insert_r("  ❌ الرقم غير صحيح أو غير صالح\n\n", "invalid")
+
+                if data.get("country"):
+                    insert_r("  🌍 الدولة          : ", "key")
+                    insert_r(f"{data['country']}\n", "value")
+
+                if data.get("country_code"):
+                    insert_r("  🔢 مفتاح الدولة    : ", "key")
+                    insert_r(f"{data['country_code']}\n", "value")
+
+                if data.get("location"):
+                    insert_r("  📍 المنطقة         : ", "key")
+                    insert_r(f"{data['location']}\n", "value")
+
+                if data.get("carrier"):
+                    insert_r("  📡 شركة الاتصالات  : ", "key")
+                    insert_r(f"{data['carrier']}\n", "value")
+
+                if data.get("type"):
+                    insert_r("  📱 نوع الخط        : ", "key")
+                    insert_r(f"{data['type']}\n", "value")
+
+                if data.get("timezone"):
+                    insert_r("  🕐 المنطقة الزمنية : ", "key")
+                    insert_r(f"{data['timezone']}\n", "value")
+
+                if data.get("national"):
+                    insert_r("  📲 الرقم المحلي    : ", "key")
+                    insert_r(f"{data['national']}\n", "value")
+
+                if data.get("_no_lib"):
+                    insert_r("\n⚠️ لمزيد من المعلومات ثبّت:\n", "warning")
+                    insert_r("  pip install phonenumbers\n", "info")
+
+                insert_r(f"\n  🔗 المصدر          : ", "key")
+                insert_r(f"{data.get('source', 'غير معروف')}\n", "info")
+                insert_r(f"\n{'─'*52}\n", "divider")
+
+            search_btn.config(state=tk.NORMAL, text="🔍 فحص")
+
+        threading.Thread(target=run, daemon=True).start()
+
+    # ── Buttons ──
+    btn_frame = tk.Frame(ph_win, bg="#0A1A0A")
+    btn_frame.pack(fill=tk.X, padx=20, pady=10)
+
+    search_btn = tk.Button(btn_frame, text="🔍 فحص",
+                           command=do_lookup,
+                           font=("Consolas", 12, "bold"),
+                           bg="#16A34A", fg="white",
+                           activebackground="#15803D", activeforeground="white",
+                           bd=0, padx=25, pady=10, cursor="hand2")
+    search_btn.pack(side=tk.LEFT, padx=5)
+
+    clr_btn = tk.Button(btn_frame, text="🗑️ مسح",
+                        command=clear_r,
+                        font=("Consolas", 11),
+                        bg="#0D2B0D", fg="#4ADE80",
+                        activebackground="#1A3A1A", activeforeground="white",
+                        bd=0, padx=15, pady=10, cursor="hand2")
+    clr_btn.pack(side=tk.LEFT, padx=5)
+
+    ph_entry.bind("<Return>", lambda e: do_lookup())
+    ph_entry.focus()
+
+    insert_r("أدخل رقم الهاتف مع مفتاح الدولة ثم اضغط 🔍 فحص\n\n", "warning")
+    insert_r("💡 لنتائج أفضل ثبّت:\n", "key")
+    insert_r("   pip install phonenumbers\n", "info")
 
 
 def open_discord_window():
@@ -1309,6 +1596,15 @@ discord_btn = tk.Button(sidebar, text="🎮  Discord",
                         command=lambda: open_discord_window())
 discord_btn.pack(fill=tk.X, padx=10, pady=5)
 
+# Phone Button
+phone_btn = tk.Button(sidebar, text="📞  Phone Lookup",
+                      font=("Consolas", 11, "bold"),
+                      bg="#16A34A", fg="white",
+                      activebackground="#15803D", activeforeground="white",
+                      bd=0, padx=20, pady=10, cursor="hand2", anchor="w",
+                      command=lambda: open_phone_window())
+phone_btn.pack(fill=tk.X, padx=10, pady=5)
+
 tk.Frame(sidebar, bg="#2D2D4E", height=1).pack(fill=tk.X, padx=20, pady=20)
 
 version_label = tk.Label(sidebar, text="v5.0 • 2026", font=("Consolas", 8),
@@ -1439,6 +1735,5 @@ update_console_status("  أدخل IP أو نطاق الهدف ثم اضغط 'ف�
 
 if not folium:
     update_console_status("  ⚠️ تحذير: Folium غير مثبت. ميزة الخريطة معطلة. (pip install folium)", style_tag="error")
-
 
 root.mainloop()
