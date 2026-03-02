@@ -22,7 +22,7 @@ except ImportError:
 # ═══════════════════════════════════════════
 # CONFIG & AUTO-UPDATE
 # ═══════════════════════════════════════════
-APP_VERSION    = "5.2"
+APP_VERSION    = "5.3"
 VERSION_URL = "https://raw.githubusercontent.com/FLASH0FLASH/flash-tool/main/version.txt"
 UPDATE_URL  = "https://raw.githubusercontent.com/FLASH0FLASH/flash-tool/main/flash_control_center.py"
 USER_DATA_FILE = os.path.join(os.path.expanduser("~"), ".flash_user.json")
@@ -209,7 +209,9 @@ def show_splash_and_name():
             time.sleep(0.3)
 
         time.sleep(0.6)
-        splash.destroy()
+        try:
+            splash.destroy()
+        except: pass
 
     if username:
         canvas.create_text(w//2, 285, text=f"أهلاً بعودتك {username}! ⚡",
@@ -1544,7 +1546,7 @@ def open_instagram_window():
 # GUI SETUP
 # ═══════════════════════════════════════════
 root = tk.Tk()
-root.title(f"FLASH Control Center v5.0  ⚡  |  {CURRENT_USER}")
+root.title(f"FLASH Control Center v5.3  ⚡  |  {CURRENT_USER}")
 root.geometry("1440x900")
 root.minsize(1100, 700)
 root.configure(bg=BG_MAIN)
@@ -1607,7 +1609,7 @@ phone_btn.pack(fill=tk.X, padx=10, pady=5)
 
 tk.Frame(sidebar, bg="#2D2D4E", height=1).pack(fill=tk.X, padx=20, pady=20)
 
-version_label = tk.Label(sidebar, text="v5.0 • 2026", font=("Consolas", 8),
+version_label = tk.Label(sidebar, text="v5.3 • 2026", font=("Consolas", 8),
                          bg=BG_SIDEBAR, fg="#475569")
 version_label.pack(side=tk.BOTTOM, pady=15)
 
@@ -1730,11 +1732,10 @@ console_text.tag_config("info",      foreground="#94A3B8")
 console_text.tag_config("normal",    foreground=CONSOLE_FG)
 
 # Welcome Message
-update_console_status(f"  ⚡ FLASH Control Center v5.0  |  أهلاً {CURRENT_USER}!", style_tag="header")
+update_console_status(f"  ⚡ FLASH Control Center v5.3  |  أهلاً {CURRENT_USER}!", style_tag="header")
 update_console_status("  أدخل IP أو نطاق الهدف ثم اضغط 'فحص شامل'.\n", style_tag="info")
 
 if not folium:
     update_console_status("  ⚠️ تحذير: Folium غير مثبت. ميزة الخريطة معطلة. (pip install folium)", style_tag="error")
 
 root.mainloop()
-
