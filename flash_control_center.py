@@ -23,8 +23,8 @@ except ImportError:
 # CONFIG & AUTO-UPDATE
 # ═══════════════════════════════════════════
 APP_VERSION    = "5.2"
-VERSION_URL    = "https://raw.githubusercontent.com/your-username/flash-tool/main/version.txt"
-UPDATE_URL     = "https://raw.githubusercontent.com/your-username/flash-tool/main/flash.py"
+VERSION_URL = "https://raw.githubusercontent.com/FLASH0FLASH/flash-tool/main/version.txt"
+UPDATE_URL  = "https://raw.githubusercontent.com/FLASH0FLASH/flash-tool/main/flash_control_center.py"
 USER_DATA_FILE = os.path.join(os.path.expanduser("~"), ".flash_user.json")
 
 def load_user_data():
@@ -1737,3 +1737,4 @@ if not folium:
     update_console_status("  ⚠️ تحذير: Folium غير مثبت. ميزة الخريطة معطلة. (pip install folium)", style_tag="error")
 
 root.mainloop()
+
